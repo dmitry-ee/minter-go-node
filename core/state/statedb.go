@@ -1,10 +1,15 @@
 package state
 
 import (
+	"bytes"
+	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"github.com/MinterTeam/go-amino"
 	"github.com/MinterTeam/minter-go-node/cmd/utils"
+	"github.com/MinterTeam/minter-go-node/core/check"
+	"github.com/MinterTeam/minter-go-node/core/dao"
+	"github.com/MinterTeam/minter-go-node/core/developers"
 	"github.com/MinterTeam/minter-go-node/core/rewards"
 	"github.com/MinterTeam/minter-go-node/core/types"
 	"github.com/MinterTeam/minter-go-node/core/validators"
@@ -17,16 +22,11 @@ import (
 	"github.com/MinterTeam/minter-go-node/upgrades"
 	dbm "github.com/tendermint/tendermint/libs/db"
 	tmTypes "github.com/tendermint/tendermint/types"
+	"io/ioutil"
 	"math/big"
 	"os"
-	"sync"
-
-	"bytes"
-	"encoding/binary"
-	"github.com/MinterTeam/minter-go-node/core/check"
-	"github.com/MinterTeam/minter-go-node/core/dao"
-	"github.com/MinterTeam/minter-go-node/core/developers"
 	"sort"
+	"sync"
 )
 
 const UnbondPeriod = 518400
@@ -75,6 +75,12 @@ type StateDB struct {
 
 	lock             sync.Mutex
 	keepStateHistory bool
+
+	changedState *types.AppState
+}
+
+func (s *StateDB) ChangedState() *types.AppState {
+	return s.changedState
 }
 
 type StakeCache struct {
@@ -158,6 +164,7 @@ func New(height uint64, db dbm.DB, keepState bool) (*StateDB, error) {
 		totalSlashedDirty:     false,
 		stakeCache:            make(map[types.CoinSymbol]StakeCache),
 		keepStateHistory:      keepState,
+		changedState:          &types.AppState{},
 	}, nil
 }
 
@@ -176,6 +183,7 @@ func (s *StateDB) Clear() {
 	s.totalSlashedDirty = false
 	s.stakeCache = make(map[types.CoinSymbol]StakeCache)
 	s.lock = sync.Mutex{}
+	s.changedState = &types.AppState{}
 }
 
 func (s *StateDB) GetTotalSlashed() *big.Int {
@@ -707,6 +715,34 @@ func (s *StateDB) Commit() (root []byte, version int64, err error) {
 			s.deleteStateObject(stateObject)
 		} else {
 			s.updateStateObject(stateObject)
+
+			// add account
+			balance := make([]types.Balance, len(stateObject.Balances().Data))
+			i := 0
+			for coin, value := range stateObject.Balances().Data {
+				balance[i] = types.Balance{
+					Coin:  coin,
+					Value: value,
+				}
+				i++
+			}
+
+			acc := types.Account{
+				Address: stateObject.address,
+				Balance: balance,
+				Nonce:   stateObject.data.Nonce,
+			}
+
+			if stateObject.IsMultisig() {
+				acc.MultisigData = &types.Multisig{
+					Weights:   stateObject.data.MultisigData.Weights,
+					Threshold: stateObject.data.MultisigData.Threshold,
+					Addresses: stateObject.data.MultisigData.Addresses,
+				}
+			}
+
+			s.changedState.Accounts = append(s.changedState.Accounts, acc)
+			// add account
 		}
 		delete(s.stateAccountsDirty, addr)
 	}
@@ -719,6 +755,14 @@ func (s *StateDB) Commit() (root []byte, version int64, err error) {
 			s.deleteStateCoin(stateCoin)
 		} else {
 			s.updateStateCoin(stateCoin)
+
+			s.changedState.Coins = append(s.changedState.Coins, types.Coin{
+				Name:           stateCoin.Name(),
+				Symbol:         stateCoin.Symbol(),
+				Volume:         stateCoin.Volume(),
+				Crr:            stateCoin.Crr(),
+				ReserveBalance: stateCoin.ReserveBalance(),
+			})
 		}
 
 		delete(s.stateCoinsDirty, symbol)
@@ -740,11 +784,47 @@ func (s *StateDB) Commit() (root []byte, version int64, err error) {
 		s.clearStateCandidates()
 		s.updateStateCandidates(s.stateCandidates)
 		s.stateCandidatesDirty = false
+
+		// add candidates
+		for _, candidate := range s.stateCandidates.data {
+			var stakes []types.Stake
+			for _, s := range candidate.Stakes {
+				stakes = append(stakes, types.Stake{
+					Owner:    s.Owner,
+					Coin:     s.Coin,
+					Value:    s.Value,
+					BipValue: s.BipValue,
+				})
+			}
+
+			s.changedState.Candidates = append(s.changedState.Candidates, types.Candidate{
+				RewardAddress:  candidate.RewardAddress,
+				OwnerAddress:   candidate.OwnerAddress,
+				TotalBipStake:  candidate.TotalBipStake,
+				PubKey:         candidate.PubKey,
+				Commission:     candidate.Commission,
+				Stakes:         stakes,
+				CreatedAtBlock: candidate.CreatedAtBlock,
+				Status:         candidate.Status,
+			})
+		}
 	}
 
 	if s.stateValidatorsDirty {
 		s.updateStateValidators(s.stateValidators)
 		s.stateValidatorsDirty = false
+
+		// add validators
+		for _, val := range s.stateValidators.data {
+			s.changedState.Validators = append(s.changedState.Validators, types.Validator{
+				RewardAddress: val.RewardAddress,
+				TotalBipStake: val.TotalBipStake,
+				PubKey:        val.PubKey,
+				Commission:    val.Commission,
+				AccumReward:   val.AccumReward,
+				AbsentTimes:   val.AbsentTimes,
+			})
+		}
 	}
 
 	if s.totalSlashedDirty {
@@ -761,6 +841,8 @@ func (s *StateDB) Commit() (root []byte, version int64, err error) {
 			panic(err)
 		}
 	}
+
+	s.SaveChangedState()
 
 	s.Clear()
 	s.height++
@@ -2135,4 +2217,18 @@ func (s *StateDB) Height() uint64 {
 
 func (s *StateDB) DB() dbm.DB {
 	return s.db
+}
+
+func (s *StateDB) SaveChangedState() {
+	cdc := amino.NewCodec()
+
+	jsonBytes, err := cdc.MarshalJSON(s.changedState)
+	if err != nil {
+		panic(err)
+	}
+
+	err = ioutil.WriteFile(fmt.Sprintf("%s/changes/%d.json", utils.GetMinterHome(), s.Height()), jsonBytes, 0644)
+	if err != nil {
+		panic(err)
+	}
 }

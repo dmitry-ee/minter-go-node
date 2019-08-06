@@ -5,16 +5,16 @@ import (
 )
 
 type AppState struct {
-	Note         string       `json:"note"`
-	StartHeight  uint64       `json:"start_height"`
+	Note         string       `json:"note,omitempty"`
+	StartHeight  uint64       `json:"start_height,omitempty"`
 	Validators   []Validator  `json:"validators,omitempty"`
 	Candidates   []Candidate  `json:"candidates,omitempty"`
 	Accounts     []Account    `json:"accounts,omitempty"`
 	Coins        []Coin       `json:"coins,omitempty"`
 	FrozenFunds  []FrozenFund `json:"frozen_funds,omitempty"`
 	UsedChecks   []UsedCheck  `json:"used_checks,omitempty"`
-	MaxGas       uint64       `json:"max_gas"`
-	TotalSlashed *big.Int     `json:"total_slashed"`
+	MaxGas       uint64       `json:"max_gas,omitempty"`
+	TotalSlashed *big.Int     `json:"total_slashed,omitempty"`
 }
 
 type Validator struct {

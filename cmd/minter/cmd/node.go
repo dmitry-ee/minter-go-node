@@ -50,6 +50,10 @@ func runNode() error {
 		return err
 	}
 
+	if err := common.EnsureDir(utils.GetMinterHome()+"/changes", 0777); err != nil {
+		return err
+	}
+
 	// init events db
 	eventsdb.InitDB(cfg)
 
