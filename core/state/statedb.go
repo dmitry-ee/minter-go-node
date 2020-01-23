@@ -75,6 +75,7 @@ type StateDB struct {
 
 	lock             sync.Mutex
 	keepStateHistory bool
+	keepLastStates   int
 }
 
 type StakeCache struct {
@@ -131,13 +132,29 @@ func NewForCheckFromDeliver(s *StateDB) *StateDB {
 	}
 }
 
-func New(height uint64, db dbm.DB, keepState bool) (*StateDB, error) {
+func New(height uint64, db dbm.DB, keepState bool, keepLastStates int) (*StateDB, error) {
 	tree := NewMutableTree(db)
 
-	_, err := tree.LazyLoadVersion(int64(height))
+	if keepState && keepLastStates > 0 {
+		_, err := tree.LoadVersion(int64(height))
+		if err != nil {
+			return nil, err
+		}
 
-	if err != nil {
-		return nil, err
+		if int(height)-1 > keepLastStates {
+			lastAcceptedHeight := int(height) - keepLastStates - 1
+			for _, version := range tree.AvailableVersions() {
+				if version < lastAcceptedHeight {
+					log.Info(fmt.Sprintf("Deleting version %d", version), "module", "state")
+					_ = tree.DeleteVersion(int64(version))
+				}
+			}
+		}
+	} else {
+		_, err := tree.LazyLoadVersion(int64(height))
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return &StateDB{
@@ -754,7 +771,9 @@ func (s *StateDB) Commit() (root []byte, version int64, err error) {
 
 	hash, version, err := s.iavl.SaveVersion()
 
-	if !s.keepStateHistory && version > 1 {
+	if s.keepStateHistory && s.keepLastStates > 0 {
+		_ = s.iavl.DeleteVersion(version - int64(s.keepLastStates))
+	} else if !s.keepStateHistory && version > 1 {
 		err = s.iavl.DeleteVersion(version - 1)
 
 		if err != nil {

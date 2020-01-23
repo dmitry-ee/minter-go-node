@@ -19,6 +19,7 @@ type Tree interface {
 	Version() int64
 	Hash() []byte
 	Iterate(fn func(key []byte, value []byte) bool) (stopped bool)
+	AvailableVersions() []int
 }
 
 func NewMutableTree(db dbm.DB) *MutableTree {
@@ -46,6 +47,10 @@ func (t *MutableTree) GetImmutableAtHeight(version int64) (*ImmutableTree, error
 
 func (t *MutableTree) Iterate(fn func(key []byte, value []byte) bool) (stopped bool) {
 	return t.tree.Iterate(fn)
+}
+
+func (t *MutableTree) AvailableVersions() []int {
+	return t.tree.AvailableVersions()
 }
 
 func (t *MutableTree) Hash() []byte {
@@ -175,5 +180,9 @@ func (t *ImmutableTree) SaveVersion() ([]byte, int64, error) {
 }
 
 func (t *ImmutableTree) DeleteVersion(version int64) error {
+	panic("Not implemented")
+}
+
+func (t *ImmutableTree) AvailableVersions() []int {
 	panic("Not implemented")
 }

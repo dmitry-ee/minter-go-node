@@ -236,6 +236,8 @@ type BaseConfig struct {
 
 	KeepStateHistory bool `mapstructure:"keep_state_history"`
 
+	KeepLastStates int `mapstructure:"keep_last_states"`
+
 	APISimultaneousRequests int `mapstructure:"api_simultaneous_requests"`
 
 	LogPath string `mapstructure:"log_path"`

@@ -2,6 +2,12 @@
 
 ## 1.0.5
 
+IMPROVEMENT
+
+- [config] Add keep_last_states param
+
+## 1.0.5
+
 BUG FIXES
 
 - [core] Fix coin liquidation issue
