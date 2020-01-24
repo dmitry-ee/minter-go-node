@@ -7,18 +7,12 @@ import (
 	"github.com/MinterTeam/minter-go-node/config"
 	"github.com/MinterTeam/minter-go-node/core/appdb"
 	"github.com/MinterTeam/minter-go-node/core/state"
-	"github.com/tendermint/tendermint/libs/common"
 	"github.com/tendermint/tendermint/libs/db"
 	"github.com/tendermint/tendermint/types"
 	"time"
 )
 
 func main() {
-	err := common.EnsureDir(utils.GetMinterHome()+"/config", 0777)
-	if err != nil {
-		panic(err)
-	}
-
 	ldb, err := db.NewGoLevelDB("state", utils.GetMinterHome()+"/data")
 	if err != nil {
 		panic(err)
@@ -26,7 +20,7 @@ func main() {
 
 	applicationDB := appdb.NewAppDB(config.GetConfig())
 	height := applicationDB.GetLastHeight()
-	currentState, err := state.New(height, ldb, false, 0)
+	currentState, err := state.NewForCheck(height, ldb)
 	if err != nil {
 		panic(err)
 	}
