@@ -175,6 +175,7 @@ func New(height uint64, db dbm.DB, keepState bool, keepLastStates int) (*StateDB
 		totalSlashedDirty:     false,
 		stakeCache:            make(map[types.CoinSymbol]StakeCache),
 		keepStateHistory:      keepState,
+		keepLastStates:        keepLastStates,
 	}, nil
 }
 
