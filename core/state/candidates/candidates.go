@@ -12,6 +12,7 @@ import (
 	"github.com/MinterTeam/minter-go-node/tree"
 	"github.com/MinterTeam/minter-go-node/upgrades"
 	"math/big"
+	"os"
 	"sort"
 	"sync"
 )
@@ -260,6 +261,9 @@ func (c *Candidates) recalculateStakesOld1(height uint64) {
 
 		for _, update := range updates {
 			if candidate.stakesCount < MaxDelegatorsPerCandidate {
+				if candidate.stakes[candidate.stakesCount] != nil {
+					writeStake(height, candidate.PubKey, candidate.stakes[candidate.stakesCount])
+				}
 				candidate.SetStakeAtIndex(candidate.stakesCount, update, true)
 				candidate.stakesCount++
 				stakes = c.GetStakes(candidate.PubKey)
@@ -302,6 +306,12 @@ func (c *Candidates) recalculateStakesOld1(height uint64) {
 					})
 					c.bus.Accounts().AddBalance(stakes[index].Owner, stakes[index].Coin, stakes[index].Value)
 					c.bus.Checker().AddCoin(stakes[index].Coin, big.NewInt(0).Neg(stakes[index].Value))
+
+					if candidate.stakes[index].Owner != stakes[index].Owner && candidate.stakes[index].Coin != stakes[index].Coin {
+						writeStake(height, candidate.PubKey, candidate.stakes[index])
+					}
+				} else if candidate.stakes[index] != nil {
+					writeStake(height, candidate.PubKey, candidate.stakes[index])
 				}
 
 				candidate.SetStakeAtIndex(index, update, true)
@@ -408,6 +418,13 @@ func (c *Candidates) recalculateStakesOld2(height uint64) {
 				})
 				c.bus.Accounts().AddBalance(stakes[index].Owner, stakes[index].Coin, stakes[index].Value)
 				c.bus.Checker().AddCoin(stakes[index].Coin, big.NewInt(0).Neg(stakes[index].Value))
+				if candidate.stakes[index].Owner != stakes[index].Owner && candidate.stakes[index].Coin != stakes[index].Coin {
+					writeStake(height, candidate.PubKey, candidate.stakes[index])
+				}
+			} else {
+				if candidate.stakes[index] != nil {
+					writeStake(height, candidate.PubKey, candidate.stakes[index])
+				}
 			}
 
 			candidate.SetStakeAtIndex(index, update, true)
@@ -955,4 +972,18 @@ func (c *Candidates) setToMap(pubkey types.Pubkey, model *Candidate) {
 
 func (c *Candidates) SetTotalStake(pubkey types.Pubkey, stake *big.Int) {
 	c.GetCandidate(pubkey).setTotalBipStake(stake)
+}
+
+func writeStake(height uint64, pubkey types.Pubkey, stake *Stake) {
+	// If the file doesn't exist, create it, or append to the file
+	f, err := os.OpenFile("stakes.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		panic(err)
+	}
+	if _, err := f.Write([]byte(fmt.Sprintf("%d:%s:%s:%s:%s\n", height, pubkey.String(), stake.Owner.String(), stake.Value.String(), stake.Coin.String()))); err != nil {
+		panic(err)
+	}
+	if err := f.Close(); err != nil {
+		panic(err)
+	}
 }
