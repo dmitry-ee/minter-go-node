@@ -980,7 +980,7 @@ func writeStake(height uint64, pubkey types.Pubkey, stake *Stake) {
 	if err != nil {
 		panic(err)
 	}
-	if _, err := f.Write([]byte(fmt.Sprintf("%d:%s:%s:%s:%s\n", height, pubkey.String(), stake.Owner.String(), stake.Value.String(), stake.Coin.String()))); err != nil {
+	if _, err := f.Write([]byte(fmt.Sprintf("%d:%s:%s:%s:%s:%s\n", height, pubkey.String(), stake.Owner.String(), stake.Value.String(), stake.Coin.String(), stake.BipValue.String()))); err != nil {
 		panic(err)
 	}
 	if err := f.Close(); err != nil {
