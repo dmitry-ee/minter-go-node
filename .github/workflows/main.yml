@@ -17,6 +17,7 @@ jobs:
       API_RUN_PORT: 8841
       SECRET_DOCKER_HUB_PASSWORD: ${{ secrets.DOCKER_HUB_PASSWORD }}
       SECRET_DOCKER_HUB_USER: ${{ secrets.DOCKER_HUB_USER }}
+      SECRET_DOCKER_HUB_REPO: ${{ secrets.DOCKER_HUB_REPO }}
       DOCKER_IMAGE: minter
     runs-on: ubuntu-latest
     steps:
@@ -28,7 +29,10 @@ jobs:
       - name: Set envs
         run: |
           echo ::set-env name=VERSION::$(awk -F\" '/Version =/ { print $2; exit }' < version/version.go)
-          echo ::set-env name=DOCKER_REPO::$(if [[ "$SECRET_DOCKER_HUB_USER" == "" ]]; then echo "prbuild"; else echo "$SECRET_DOCKER_HUB_USER"; fi;)
+          # if secret DOCKER_HUB_REPO is not set, DOCKER_HUB_USER will be used instead of REPO
+          # otherwise secrets are empty and repo "testbuild" will be used
+          echo ::set-env name=DOCKER_REPO::$(if [[ "$SECRET_DOCKER_HUB_REPO" == "" ]]; then echo "$DOCKER_HUB_USER"; else echo "$SECRET_DOCKER_HUB_REPO"; fi;)
+          echo ::set-env name=DOCKER_REPO::$(if [[ "$DOCKER_REPO" == "" ]]; then echo "testbuild"; else echo "$DOCKER_REPO"; fi;)
 
       - name: Docker build
         run: docker build -t $DOCKER_REPO/$DOCKER_IMAGE:$VERSION .
@@ -54,7 +58,7 @@ jobs:
         if: env.RUN_TEST_RESULT == 'FAIL' || env.API_TEST_RESULT == 'FAIL'
 
       - name: Docker login
-        run: echo "$SECRET_DOCKER_HUB_PASSWORD" | docker login -u $DOCKER_REPO --password-stdin
+        run: echo "$SECRET_DOCKER_HUB_PASSWORD" | docker login -u $SECRET_DOCKER_HUB_USER --password-stdin
         if: github.ref == 'refs/heads/master'
 
       - name: Docker push versioned image
