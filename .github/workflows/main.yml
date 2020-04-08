@@ -29,10 +29,17 @@ jobs:
       - name: Set envs
         run: |
           echo ::set-env name=VERSION::$(awk -F\" '/Version =/ { print $2; exit }' < version/version.go)
-          # if secret DOCKER_HUB_REPO is not set, DOCKER_HUB_USER will be used instead of REPO
-          # otherwise secrets are empty and repo "testbuild" will be used
-          echo ::set-env name=DOCKER_REPO::$(if [[ "$SECRET_DOCKER_HUB_REPO" == "" ]]; then echo "$DOCKER_HUB_USER"; else echo "$SECRET_DOCKER_HUB_REPO"; fi;)
-          echo ::set-env name=DOCKER_REPO::$(if [[ "$DOCKER_REPO" == "" ]]; then echo "testbuild"; else echo "$DOCKER_REPO"; fi;)
+          
+      - run: echo ::set-env name=DOCKER_REPO::$(echo "$SECRET_DOCKER_HUB_USER")
+        if: env.SECRET_DOCKER_HUB_USER != ""
+        
+      # if secret DOCKER_HUB_REPO is not set, DOCKER_HUB_USER will be used instead of REPO  
+      - run: echo ::set-env name=DOCKER_REPO::$(echo "$SECRET_DOCKER_HUB_REPO")
+        if: env.SECRET_DOCKER_HUB_REPO != ""
+        
+      # otherwise secrets are empty and repo "testbuild" will be used
+      - run: echo ::set-env name=DOCKER_REPO::$(echo "testbuild")
+        if: env.SECRET_DOCKER_HUB_USER == ""
 
       - name: Docker build
         run: docker build -t $DOCKER_REPO/$DOCKER_IMAGE:$VERSION .
