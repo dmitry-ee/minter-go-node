@@ -17,8 +17,7 @@ jobs:
       API_RUN_PORT: 8841
       SECRET_DOCKER_HUB_PASSWORD: ${{ secrets.DOCKER_HUB_PASSWORD }}
       SECRET_DOCKER_HUB_USER: ${{ secrets.DOCKER_HUB_USER }}
-      DOCKERHUB_REPO: minterteam
-      DOCKERHUB_IMAGE: minter
+      DOCKER_IMAGE: minter
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -29,13 +28,13 @@ jobs:
       - name: Set envs
         run: |
           echo ::set-env name=VERSION::$(awk -F\" '/Version =/ { print $2; exit }' < version/version.go)
-          echo ::set-env name=DOCKERHUB_REPO::$(if [[ "$SECRET_DOCKER_HUB_USER" == "" ]]; then echo "prbuild"; else echo "$SECRET_DOCKER_HUB_USER"; fi)
+          echo ::set-env name=DOCKER_REPO::$(if [[ "$SECRET_DOCKER_HUB_USER" == "" ]]; then echo "prbuild"; else echo "$SECRET_DOCKER_HUB_USER"; fi;)
 
       - name: Docker build
-        run: docker build -t $DOCKERHUB_REPO/$DOCKERHUB_IMAGE:$VERSION .
+        run: docker build -t $DOCKER_REPO/$DOCKER_IMAGE:$VERSION .
 
       - name: Start docker container
-        run: docker run -d --name $CONTAINER_NAME -p $API_RUN_PORT:8841 $DOCKERHUB_REPO/$DOCKERHUB_IMAGE:$VERSION
+        run: docker run -d --name $CONTAINER_NAME -p $API_RUN_PORT:8841 $DOCKER_REPO/$DOCKER_IMAGE:$VERSION
 
       - name: Check container is still running
         run: |
@@ -55,15 +54,15 @@ jobs:
         if: env.RUN_TEST_RESULT == 'FAIL' || env.API_TEST_RESULT == 'FAIL'
 
       - name: Docker login
-        run: echo "$SECRET_DOCKER_HUB_PASSWORD" | docker login -u $DOCKERHUB_REPO --password-stdin
+        run: echo "$SECRET_DOCKER_HUB_PASSWORD" | docker login -u $DOCKER_REPO --password-stdin
         if: github.ref == 'refs/heads/master'
 
       - name: Docker push versioned image
-        run: docker push $DOCKERHUB_REPO/$DOCKERHUB_IMAGE:$VERSION
+        run: docker push $DOCKER_REPO/$DOCKER_IMAGE:$VERSION
         if: github.ref == 'refs/heads/master'
 
       - name: Docker push latest image
         run: |
-          docker tag $DOCKERHUB_REPO/$DOCKERHUB_IMAGE:$VERSION $DOCKERHUB_REPO/$DOCKERHUB_IMAGE:latest
-          docker push $DOCKERHUB_REPO/$DOCKERHUB_IMAGE:latest
+          docker tag $DOCKER_REPO/$DOCKER_IMAGE:$VERSION $DOCKER_REPO/$DOCKER_IMAGE:latest
+          docker push $DOCKER_REPO/$DOCKER_IMAGE:latest
         if: github.ref == 'refs/heads/master'
